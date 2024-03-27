@@ -1,137 +1,50 @@
 package main
 
 import (
-	"bufio"
-	"errors"
+	"bytes"
 	"fmt"
-	"io"
 	"os"
-	"unicode"
 )
-
-type Token int
-
-const (
-	EOF = iota
-	ILLEGAL
-
-	L_BRACE
-	R_BRACE
-
-	DBL_QUOTE
-	IDENT
-	COLON
-	COMMA
-)
-
-var tokens []string = []string{
-	EOF:       "EOF",
-	ILLEGAL:   "ILLEGAL",
-	L_BRACE:   "{",
-	R_BRACE:   "}",
-	DBL_QUOTE: "\"",
-	IDENT:     "IDENT",
-	COLON:     ":",
-	COMMA:     ",",
-}
-
-type Position struct {
-	line   int
-	column int
-}
-
-func (p *Position) String() string {
-	return fmt.Sprintf("%d:%d", p.line, p.column)
-}
-
-func (t Token) String() string {
-	return tokens[t]
-}
-
-type Lexer struct {
-	reader *bufio.Reader
-	pos    Position
-}
-
-func NewLexer(reader io.Reader) *Lexer {
-	return &Lexer{
-		reader: bufio.NewReader(reader),
-		pos:    Position{line: 1, column: 0},
-	}
-}
-
-func (l *Lexer) Lex() (Position, Token, string) {
-	for {
-		l.pos.column += 1
-		cur, _, err := l.reader.ReadRune()
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				return l.pos, EOF, ""
-			}
-			err = fmt.Errorf("invalid json: %s", err.Error())
-			handleError(err)
-		}
-		switch cur {
-		case '\n':
-			l.pos.line += 1
-			l.pos.column = 0
-			continue
-		case '{':
-			return l.pos, L_BRACE, "{"
-		case '}':
-			return l.pos, R_BRACE, "}"
-		case ':':
-			return l.pos, COLON, ":"
-		case ',':
-			return l.pos, COMMA, ","
-		case '"':
-			return l.LexIdent()
-		default:
-			if unicode.IsSpace(cur) {
-				continue
-			} else {
-				return l.pos, ILLEGAL, string(cur)
-			}
-		}
-	}
-}
-
-func (l *Lexer) rewind() {
-	err := l.reader.UnreadRune()
-	if err != nil {
-		handleError(err)
-	}
-	l.pos.column -= 1
-}
-
-func (l *Lexer) LexIdent() (Position, Token, string) {
-	lit := "\""
-	startPos := l.pos
-	for {
-		cur, _, err := l.reader.ReadRune()
-		if err != nil {
-			handleError(err)
-		}
-		l.pos.column += 1
-
-		if unicode.IsLetter(cur) || unicode.IsDigit(cur) {
-			lit = lit + string(cur)
-		} else {
-			if cur == '"' {
-				return startPos, IDENT, lit + "\""
-			}
-			l.rewind()
-			return l.pos, IDENT, lit
-		}
-	}
-}
 
 func handleError(err error) {
 	if err == nil {
 		return
 	}
-	os.Stderr.WriteString(err.Error())
+	os.Stderr.WriteString(err.Error() + "\n")
 	os.Exit(1)
+}
+
+func PrintValue(value Value) string {
+	res := bytes.Buffer{}
+
+	q := []Value{value}
+
+	for len(q) > 0 {
+		levelSize := len(q)
+
+		newQ := []Value{}
+
+		for i := 0; i < levelSize; i += 1 {
+			v := q[i]
+			switch v.GetType() {
+			case OBJECT:
+				o := v.(Object)
+				for idx, prop := range o.Properties {
+					res.WriteString(fmt.Sprintf("{ \"Property\": {\"Key\": %s, \"Value\":%s} } ", prop.Key.Value, PrintValue(prop.Value)))
+					if idx != len(o.Properties)-1 {
+						res.WriteString(",")
+					}
+				}
+			case LITERAL:
+				l := v.(Literal)
+				res.WriteString(fmt.Sprintf("{\"Literal\": %s} ", l.Value))
+			}
+		}
+
+		q = newQ
+	}
+
+	return res.String()
 }
 
 func main() {
@@ -142,14 +55,15 @@ func main() {
 		}
 
 		l := NewLexer(f)
-
-		for {
-			pos, token, lit := l.Lex()
-			if token == EOF {
-				break
-			}
-			fmt.Printf("%-8s %-8s %-8s\n", pos.String(), token, lit)
+		p := NewParser(l)
+		err = p.Parse()
+		if err != nil {
+			handleError(err)
 		}
+
+		cur := p.tree.root
+		fmt.Printf("[%s]\n", PrintValue(cur.Value))
+
 	} else {
 		handleError(fmt.Errorf("expected input file in first argument"))
 	}
