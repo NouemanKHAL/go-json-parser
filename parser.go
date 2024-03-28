@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"bytes"
+	"fmt"
+)
 
 /*
 JSON structure:
@@ -54,6 +57,12 @@ func (r Root) GetType() NodeType {
 	return r.Type
 }
 
+func NewRoot() *Root {
+	return &Root{
+		Type: ROOT,
+	}
+}
+
 type Object struct {
 	Type       NodeType
 	Properties []Property
@@ -91,26 +100,17 @@ func (l Literal) GetType() NodeType {
 	return l.Type
 }
 
-type JsonTree struct {
-	root *Root
-}
-
-func NewJsonTree() *JsonTree {
-	return &JsonTree{}
-
-}
-
 type Parser struct {
 	lexer     *Lexer
 	curToken  Token
 	peekToken Token
-	tree      *JsonTree
+	root      *Root
 }
 
 func NewParser(l *Lexer) *Parser {
 	p := &Parser{
 		lexer: l,
-		tree:  NewJsonTree(),
+		root:  NewRoot(),
 	}
 	// fill curToken & peekToken
 	p.nextToken()
@@ -275,10 +275,46 @@ func (p *Parser) Parse() error {
 		return err
 	}
 
-	p.tree.root = &Root{
-		Type:  ROOT,
-		Value: value,
+	p.root.Value = value
+	return nil
+}
+
+func (p *Parser) String() string {
+	if p.root != nil {
+		return p.printValue(p.root.Value)
+	}
+	return ""
+}
+
+func (p *Parser) printValue(v Value) string {
+	res := bytes.Buffer{}
+
+	switch v.GetType() {
+	case OBJECT:
+		o := v.(Object)
+		res.WriteString("{")
+		for idx, prop := range o.Properties {
+			res.WriteString(fmt.Sprintf("%s: %s", prop.Key.Value, p.printValue(prop.Value)))
+			if idx != len(o.Properties)-1 {
+				res.WriteString(",")
+			}
+		}
+		res.WriteString("}")
+	case LITERAL:
+		l := v.(Literal)
+		res.WriteString(l.Value)
+	case ARRAY:
+		a := v.(Array)
+		res.WriteString("[")
+		for idx, elem := range a.Elements {
+			res.WriteString(p.printValue(elem))
+			if idx != len(a.Elements)-1 {
+				res.WriteString(",")
+			}
+		}
+		res.WriteString("]")
+
 	}
 
-	return nil
+	return res.String()
 }
