@@ -26,6 +26,9 @@ const (
 	OBJECT_START
 	OBJECT_OPEN
 	OBJECT_END
+
+	ARRAY_START
+	ARRAY_END
 )
 
 type NodeType int
@@ -33,7 +36,7 @@ type NodeType int
 const (
 	ROOT NodeType = iota
 	OBJECT
-	// ARRAY
+	ARRAY
 	LITERAL
 	PROPERTY
 )
@@ -53,7 +56,7 @@ func (r Root) GetType() NodeType {
 
 type Object struct {
 	Type       NodeType
-	Properties []*Property
+	Properties []Property
 }
 
 func (o Object) GetType() NodeType {
@@ -62,7 +65,7 @@ func (o Object) GetType() NodeType {
 
 type Array struct {
 	Type     NodeType
-	Elements []*Value
+	Elements []Value
 }
 
 func (a Array) GetType() NodeType {
@@ -133,22 +136,29 @@ func (p *Parser) parseValue() (Value, error) {
 		value, err = p.parseObject()
 	case L_BRACKET:
 		value, err = p.parseArray()
-	default:
+	case IDENT:
 		value, err = p.parseLiteral()
+	case NUMBER:
+		value, err = p.parseLiteral()
+	case BOOLEAN:
+		value, err = p.parseLiteral()
+	default:
+		err := fmt.Errorf("cannot parse value, got token '%s'", p.curToken.Literal)
+		return nil, err
 	}
 	return value, err
 }
 
 func (p *Parser) parseObject() (Object, error) {
 	if p.curToken.Type != L_BRACE {
-		return Object{}, fmt.Errorf("invalid object, expected '{' got '%s'", p.curToken.Literal)
+		return Object{}, fmt.Errorf("invalid start of object, expected '{' got '%s'", p.curToken.Literal)
 	}
 
 	state := OBJECT_START
 
 	object := Object{
 		Type:       OBJECT,
-		Properties: make([]*Property, 0),
+		Properties: make([]Property, 0),
 	}
 
 	for {
@@ -157,11 +167,11 @@ func (p *Parser) parseObject() (Object, error) {
 				return object, nil
 
 			}
-			return object, fmt.Errorf("invalid object, EOF reached before '{'")
+			return Object{}, fmt.Errorf("invalid object, EOF reached before '{'")
 		}
+
 		switch state {
 		case OBJECT_START:
-
 			switch p.peekToken.Type {
 			case R_BRACE:
 				p.nextToken()
@@ -181,20 +191,56 @@ func (p *Parser) parseObject() (Object, error) {
 			if err != nil {
 				return Object{}, err
 			}
-			object.Properties = append(object.Properties, &prop)
+			object.Properties = append(object.Properties, prop)
 			state = OBJECT_START
 		case OBJECT_END:
 			p.nextToken()
 			return object, nil
 		default:
-			break
+			panic("parsing object reached unknown state")
 		}
 	}
-	return Object{}, nil
 }
 
 func (p *Parser) parseArray() (Array, error) {
-	return Array{}, nil
+	if p.curToken.Type != L_BRACKET {
+		return Array{}, fmt.Errorf("invalid start of array, expected '[' got '%s'", p.curToken.Literal)
+	}
+	Arr := Array{Type: ARRAY, Elements: make([]Value, 0)}
+	state := ARRAY_START
+	for {
+		if p.peekToken.Type == EOF {
+			if state == ARRAY_END {
+				return Arr, nil
+
+			}
+			return Arr, fmt.Errorf("invalid array, EOF reached before '['")
+		}
+		switch state {
+		case ARRAY_START:
+			p.nextToken()
+			if p.curToken.Type == R_BRACKET {
+				p.nextToken()
+				return Arr, nil
+			}
+			v, err := p.parseValue()
+			handleError(err)
+
+			Arr.Elements = append(Arr.Elements, v)
+
+			if p.peekToken.Type == R_BRACKET {
+				p.nextToken()
+				return Arr, nil
+			}
+
+			if p.peekToken.Type == COMMA {
+				p.nextToken()
+			}
+		case ARRAY_END:
+			p.nextToken()
+			return Arr, nil
+		}
+	}
 }
 
 func (p *Parser) parseLiteral() (Literal, error) {
@@ -220,7 +266,6 @@ func (p *Parser) parseProperty() (Property, error) {
 	if err != nil {
 		return Property{}, err
 	}
-
 	return Property{Type: PROPERTY, Key: lit, Value: value}, nil
 }
 
@@ -236,5 +281,4 @@ func (p *Parser) Parse() error {
 	}
 
 	return nil
-
 }

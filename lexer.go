@@ -116,15 +116,23 @@ func (l *Lexer) lex() (Position, Token) {
 			return l.pos, NewToken(L_BRACE, "{")
 		case '}':
 			return l.pos, NewToken(R_BRACE, "}")
+		case '[':
+			return l.pos, NewToken(L_BRACKET, "[")
+		case ']':
+			return l.pos, NewToken(R_BRACKET, "]")
 		case ':':
 			return l.pos, NewToken(COLON, ":")
 		case ',':
 			return l.pos, NewToken(COMMA, ",")
 		case '"':
 			p, token := l.lexString()
+
 			next, err := l.readRune()
-			if err != nil || next != '"' {
-				err = fmt.Errorf("invalid json: unterminated literal expected '\"' got %s: %s", next, err)
+			if err != nil {
+				handleError(err)
+			}
+			if next != '"' {
+				err = fmt.Errorf("invalid json: unterminated literal expected '\"' got '%c' '%x'", next, next)
 				handleError(err)
 			}
 			token.Literal = "\"" + token.Literal + "\""
@@ -166,6 +174,21 @@ func (l *Lexer) lexLiteral() (Position, Token) {
 
 }
 
+// character
+//
+//	'0020' . '10FFFF' - '"' - '\'
+//	'\' escape
+func (l *Lexer) isValidCharacter(c rune) bool {
+	if c < '\u0020' || c > unicode.MaxRune {
+		return false
+	}
+	if c == '\\' || c == '"' {
+		return false
+	}
+
+	return true
+}
+
 func (l *Lexer) lexString() (Position, Token) {
 	lit := ""
 	startPos := l.pos
@@ -176,7 +199,7 @@ func (l *Lexer) lexString() (Position, Token) {
 		}
 		l.pos.column += 1
 
-		if unicode.IsLetter(cur) || unicode.IsDigit(cur) {
+		if l.isValidCharacter(cur) {
 			lit = lit + string(cur)
 		} else {
 			l.rewind()
