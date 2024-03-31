@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
 )
 
@@ -14,23 +17,27 @@ func handleError(err error) {
 }
 
 func main() {
-	if len(os.Args) > 1 {
+	var r io.Reader
+
+	switch len(os.Args) {
+	case 1:
+		stat, err := os.Stdin.Stat()
+
+		if (stat.Mode()&fs.ModeNamedPipe) == 0 || err != nil {
+			fmt.Println("Usage:\n\tgojson [FILE] [PATH]")
+			os.Exit(0)
+		}
+		r = bufio.NewReader(os.Stdin)
+	case 2:
 		f, err := os.Open(os.Args[1])
 		if err != nil {
 			handleError(err)
 		}
-
-		l := NewLexer(f)
-		p := NewParser(l)
-		err = p.Parse()
-		if err != nil {
-			handleError(err)
-		}
-
-		fmt.Println(p)
-
-	} else {
-		handleError(fmt.Errorf("expected input file in first argument"))
+		r = bufio.NewReader(f)
 	}
 
+	l := NewLexer(r)
+	p := NewParser(l)
+	p.Parse()
+	fmt.Println(p)
 }
