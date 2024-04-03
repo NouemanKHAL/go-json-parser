@@ -18,9 +18,9 @@ func handleError(err error) {
 
 func main() {
 	var r io.Reader
+	var query string = "."
 
-	switch len(os.Args) {
-	case 1:
+	if len(os.Args) == 1 {
 		stat, err := os.Stdin.Stat()
 
 		if (stat.Mode()&fs.ModeNamedPipe) == 0 || err != nil {
@@ -28,16 +28,23 @@ func main() {
 			os.Exit(0)
 		}
 		r = bufio.NewReader(os.Stdin)
-	case 2:
+	} else if len(os.Args) >= 2 {
 		f, err := os.Open(os.Args[1])
 		if err != nil {
 			handleError(err)
 		}
 		r = bufio.NewReader(f)
+		if len(os.Args) >= 3 {
+			query = os.Args[2]
+		}
 	}
 
 	l := NewLexer(r)
 	p := NewParser(l)
 	p.Parse()
-	fmt.Println(p)
+
+	out, err := p.Get(query)
+	handleError(err)
+
+	fmt.Println(out)
 }

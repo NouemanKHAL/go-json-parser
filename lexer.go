@@ -132,7 +132,7 @@ func (l *Lexer) lex() (Position, Token) {
 				handleError(err)
 			}
 			if next != '"' {
-				err = fmt.Errorf("invalid json: unterminated literal expected '\"' got '%c' '%x'", next, next)
+				err = fmt.Errorf("invalid json: unterminated literal expected '\"' got '%c' at position %d:%d", next, l.pos.line, l.pos.column)
 				handleError(err)
 			}
 			token.Literal = "\"" + token.Literal + "\""
@@ -140,7 +140,7 @@ func (l *Lexer) lex() (Position, Token) {
 		default:
 			if unicode.IsSpace(cur) {
 				continue
-			} else if unicode.IsDigit(cur) {
+			} else if unicode.IsDigit(cur) || cur == '-' || cur == '+' {
 				l.rewind()
 				return l.lexNumber()
 			} else if unicode.IsLetter(cur) {
@@ -182,7 +182,7 @@ func (l *Lexer) isValidCharacter(c rune) bool {
 	if c < '\u0020' || c > unicode.MaxRune {
 		return false
 	}
-	if c == '\\' || c == '"' {
+	if c == '\\' || c == '"' || c == ',' {
 		return false
 	}
 
@@ -201,6 +201,34 @@ func (l *Lexer) lexString() (Position, Token) {
 
 		if l.isValidCharacter(cur) {
 			lit = lit + string(cur)
+		} else if cur == '\\' {
+			/*
+				escape
+				'"'
+				'\'
+				'/'
+				'b'
+				'f'
+				'n'
+				'r'
+				't'
+				'u' hex hex hex hex
+			*/
+
+			next, _, err := l.reader.ReadRune()
+			if err != nil {
+				handleError(err)
+			}
+			l.pos.column += 1
+
+			if next == '"' || next == '\\' || next == '/' || next == 'b' || next == 'f' || next == 'n' || next == 'r' {
+				lit = lit + string(cur) + string(next)
+			} else {
+				l.rewind()
+				l.rewind()
+				return startPos, NewToken(IDENT, lit)
+			}
+
 		} else {
 			l.rewind()
 			return startPos, NewToken(IDENT, lit)
@@ -211,6 +239,9 @@ func (l *Lexer) lexString() (Position, Token) {
 func (l *Lexer) lexNumber() (Position, Token) {
 	lit := ""
 	startPos := l.pos
+	isDecimal := false
+	firstTime := true
+
 	for {
 		cur, _, err := l.reader.ReadRune()
 		if err != nil {
@@ -218,8 +249,18 @@ func (l *Lexer) lexNumber() (Position, Token) {
 		}
 		l.pos.column += 1
 
-		if unicode.IsDigit(cur) {
+		if firstTime {
+			firstTime = false
+			if cur == '+' || cur == '-' {
+				lit += string(cur)
+				continue
+			}
+		}
+		if unicode.IsDigit(cur) || (cur == '.' && !isDecimal) {
 			lit += string(cur)
+			if cur == '.' {
+				isDecimal = true
+			}
 		} else {
 			l.rewind()
 			return startPos, NewToken(NUMBER, lit)

@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"strconv"
+	"strings"
 )
 
 /*
@@ -284,6 +286,44 @@ func (p *Parser) String() string {
 		return p.printValue(p.root.Value)
 	}
 	return ""
+}
+
+// Get returns a json value corresponding to the given query
+// A query is a string referring to a path in the underlying JSON data
+// A query starts with a . (dot) representing the root node, and followed by either attribute names
+// or a [i] to access the i-th element of an array
+func (p *Parser) Get(query string) (string, error) {
+	fields := strings.Split(query, ".")
+	v := p.root.Value
+
+	for _, field := range fields {
+		if field == "" {
+			continue
+		}
+
+		switch v.GetType() {
+		case OBJECT:
+			o := v.(Object)
+			for _, prop := range o.Properties {
+				if field == prop.Key.Value[1:len(prop.Key.Value)-1] {
+					v = prop.Value
+				}
+			}
+		case ARRAY:
+			a := v.(Array)
+			if end := strings.Index(field, "]"); end != -1 {
+				idx, err := strconv.Atoi(field[1:end])
+				if err != nil {
+					return "", err
+				}
+				v = a.Elements[idx]
+			}
+		default:
+			panic("cannot parse query: " + query)
+		}
+	}
+
+	return p.printValue(v), nil
 }
 
 func (p *Parser) printValue(v Value) string {
