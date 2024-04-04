@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -35,6 +36,21 @@ const (
 	ARRAY_START
 	ARRAY_END
 )
+
+var states = []string{
+	INIT_STATE: "INIT_STATE",
+
+	OBJECT_START: "OBJECT_START",
+	OBJECT_OPEN:  "OBJECT_OPEN",
+	OBJECT_END:   "OBJECT_END",
+
+	ARRAY_START: "ARRAY_START",
+	ARRAY_END:   "ARRAY_END",
+}
+
+func (s State) String() string {
+	return states[s]
+}
 
 type NodeType int
 
@@ -131,6 +147,9 @@ func (p *Parser) nextToken() {
 }
 
 func (p *Parser) parseValue() (Value, error) {
+	if os.Getenv("DEBUG") == "true" {
+		fmt.Println("parseValue")
+	}
 	var value Value
 	var err error
 	switch p.curToken.Type {
@@ -152,8 +171,8 @@ func (p *Parser) parseValue() (Value, error) {
 }
 
 func (p *Parser) parseObject() (Object, error) {
-	if p.curToken.Type != L_BRACE {
-		return Object{}, fmt.Errorf("invalid start of object, expected '{' got '%s'", p.curToken.Literal)
+	if os.Getenv("DEBUG") == "true" {
+		fmt.Println("parseObject")
 	}
 
 	state := OBJECT_START
@@ -172,16 +191,18 @@ func (p *Parser) parseObject() (Object, error) {
 			return Object{}, fmt.Errorf("invalid object, EOF reached before '{'")
 		}
 
+		if os.Getenv("DEBUG") == "true" {
+			fmt.Println("parseObject state: ", state)
+		}
 		switch state {
 		case OBJECT_START:
+			if p.curToken.Type != L_BRACE {
+				return Object{}, fmt.Errorf("invalid start of object, expected '{' got '%s'", p.curToken.Literal)
+			}
 			switch p.peekToken.Type {
 			case R_BRACE:
 				p.nextToken()
 				state = OBJECT_END
-			case COMMA:
-				p.nextToken()
-				p.nextToken()
-				state = OBJECT_OPEN
 			case IDENT:
 				p.nextToken()
 				state = OBJECT_OPEN
@@ -195,6 +216,19 @@ func (p *Parser) parseObject() (Object, error) {
 			}
 			object.Properties = append(object.Properties, prop)
 			state = OBJECT_START
+
+			switch p.peekToken.Type {
+			case R_BRACE:
+				p.nextToken()
+				state = OBJECT_END
+			case COMMA:
+				p.nextToken()
+				p.nextToken()
+				state = OBJECT_OPEN
+			default:
+				return Object{}, fmt.Errorf("invalid object, invalid token '%s' of type %s", p.peekToken.Literal, p.peekToken.Type)
+			}
+
 		case OBJECT_END:
 			p.nextToken()
 			return object, nil
@@ -205,6 +239,9 @@ func (p *Parser) parseObject() (Object, error) {
 }
 
 func (p *Parser) parseArray() (Array, error) {
+	if os.Getenv("DEBUG") == "true" {
+		fmt.Println("parseArray")
+	}
 	if p.curToken.Type != L_BRACKET {
 		return Array{}, fmt.Errorf("invalid start of array, expected '[' got '%s'", p.curToken.Literal)
 	}
@@ -246,6 +283,9 @@ func (p *Parser) parseArray() (Array, error) {
 }
 
 func (p *Parser) parseLiteral() (Literal, error) {
+	if os.Getenv("DEBUG") == "true" {
+		fmt.Println("parseLiteral")
+	}
 	if p.curToken.Type == IDENT || p.curToken.Type == BOOLEAN || p.curToken.Type == NULL || p.curToken.Type == NUMBER {
 		return Literal{Type: LITERAL, Value: p.curToken.Literal}, nil
 	}
@@ -253,6 +293,9 @@ func (p *Parser) parseLiteral() (Literal, error) {
 }
 
 func (p *Parser) parseProperty() (Property, error) {
+	if os.Getenv("DEBUG") == "true" {
+		fmt.Println("parseProperty cur:", p.curToken.Literal, " next:", p.peekToken.Literal)
+	}
 	lit, err := p.parseLiteral()
 	if err != nil {
 		return Property{}, err
@@ -272,6 +315,9 @@ func (p *Parser) parseProperty() (Property, error) {
 }
 
 func (p *Parser) Parse() error {
+	if os.Getenv("DEBUG") == "true" {
+		fmt.Println("func Parse()")
+	}
 	value, err := p.parseValue()
 	if err != nil {
 		return err

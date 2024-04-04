@@ -41,7 +41,8 @@ func main() {
 
 	l := NewLexer(r)
 	p := NewParser(l)
-	p.Parse()
+	err := p.Parse()
+	handleError(err)
 
 	out, err := p.Get(query)
 	handleError(err)
