@@ -163,6 +163,8 @@ func (p *Parser) parseValue() (Value, error) {
 		value, err = p.parseLiteral()
 	case BOOLEAN:
 		value, err = p.parseLiteral()
+	case NULL:
+		value, err = p.parseLiteral()
 	default:
 		err := fmt.Errorf("cannot parse value, got token '%s'", p.curToken.Literal)
 		return nil, err
