@@ -137,8 +137,7 @@ func NewParser(l *Lexer) *Parser {
 }
 
 func (p *Parser) readToken() Token {
-	_, Token := p.lexer.Lex()
-	return Token
+	return p.lexer.Lex()
 }
 
 func (p *Parser) nextToken() {
@@ -166,7 +165,7 @@ func (p *Parser) parseValue() (Value, error) {
 	case NULL:
 		value, err = p.parseLiteral()
 	default:
-		err := fmt.Errorf("cannot parse value, got token '%s'", p.curToken.Literal)
+		err := fmt.Errorf("cannot parse value, got token '%s' at line %s", p.curToken.Literal, p.curToken.Pos)
 		return nil, err
 	}
 	return value, err
@@ -174,7 +173,7 @@ func (p *Parser) parseValue() (Value, error) {
 
 func (p *Parser) parseObject() (Object, error) {
 	if p.curToken.Type != L_BRACE {
-		return Object{}, fmt.Errorf("invalid start of object, expected '{' got '%s'", p.curToken.Literal)
+		return Object{}, fmt.Errorf("invalid start of object, expected '{' got '%s' at line %v", p.curToken.Literal, p.curToken.Pos)
 	}
 
 	state := OBJECT_START
@@ -190,7 +189,7 @@ func (p *Parser) parseObject() (Object, error) {
 				return object, nil
 
 			}
-			return Object{}, fmt.Errorf("invalid object, EOF reached before '{'")
+			return Object{}, fmt.Errorf("invalid object, EOF reached before '{' at line %s", p.peekToken.Pos)
 		}
 
 		switch state {
@@ -207,7 +206,7 @@ func (p *Parser) parseObject() (Object, error) {
 				p.nextToken()
 				state = OBJECT_OPEN
 			default:
-				return Object{}, fmt.Errorf("invalid object, invalid token '%s' of type %s", p.peekToken.Literal, p.peekToken.Type)
+				return Object{}, fmt.Errorf("invalid object, invalid token '%s' of type %s at line %s", p.peekToken.Literal, p.peekToken.Type, p.peekToken.Pos)
 			}
 		case OBJECT_OPEN:
 			prop, err := p.parseProperty()
@@ -230,7 +229,7 @@ func (p *Parser) parseArray() (Array, error) {
 		fmt.Println("parseArray")
 	}
 	if p.curToken.Type != L_BRACKET {
-		return Array{}, fmt.Errorf("invalid start of array, expected '[' got '%s'", p.curToken.Literal)
+		return Array{}, fmt.Errorf("invalid start of array, expected '[' got '%s' at line %s", p.curToken.Literal, p.curToken.Pos)
 	}
 	Arr := Array{Type: ARRAY, Elements: make([]Value, 0)}
 	state := ARRAY_START
@@ -276,7 +275,7 @@ func (p *Parser) parseLiteral() (Literal, error) {
 	if p.curToken.Type == IDENT || p.curToken.Type == BOOLEAN || p.curToken.Type == NULL || p.curToken.Type == NUMBER {
 		return Literal{Type: LITERAL, Value: p.curToken.Literal}, nil
 	}
-	return Literal{}, fmt.Errorf("cannot parse literal from token '%s' of type '%s'", p.curToken.Literal, p.curToken.Type)
+	return Literal{}, fmt.Errorf("cannot parse literal from token '%s' of type '%s' at line %s", p.curToken.Literal, p.curToken.Type, p.curToken.Pos)
 }
 
 func (p *Parser) parseProperty() (Property, error) {
@@ -289,7 +288,7 @@ func (p *Parser) parseProperty() (Property, error) {
 	}
 
 	if p.peekToken.Type != COLON {
-		return Property{}, fmt.Errorf("invalid property, expected ':' got '%s'", p.curToken.Literal)
+		return Property{}, fmt.Errorf("invalid property, expected ':' got '%s' at line %s", p.curToken.Literal, p.curToken.Pos)
 	}
 	p.nextToken()
 	p.nextToken()

@@ -12,6 +12,7 @@ import (
 type Token struct {
 	Type    TokenType
 	Literal string
+	Pos     Position
 }
 type TokenType int
 
@@ -55,10 +56,11 @@ func (t TokenType) String() string {
 	return tokens[t]
 }
 
-func NewToken(typ TokenType, lit string) Token {
+func NewToken(typ TokenType, lit string, pos Position) Token {
 	return Token{
 		Type:    typ,
 		Literal: lit,
+		Pos:     pos,
 	}
 }
 
@@ -67,7 +69,7 @@ type Position struct {
 	column int
 }
 
-func (p *Position) String() string {
+func (p Position) String() string {
 	return fmt.Sprintf("%d:%d", p.line, p.column)
 }
 
@@ -83,12 +85,12 @@ func NewLexer(reader io.Reader) *Lexer {
 	}
 }
 
-func (l *Lexer) Lex() (Position, Token) {
-	pos, token := l.lex()
+func (l *Lexer) Lex() Token {
+	token := l.lex()
 	if os.Getenv("DEBUG") == "true" {
-		fmt.Printf("%-8s %-8s %-8s\n", pos.String(), token.Type, token.Literal)
+		fmt.Printf("%-8s %-8s %-8s\n", token.Pos.String(), token.Type, token.Literal)
 	}
-	return pos, token
+	return token
 }
 
 func (l *Lexer) readRune() (rune, error) {
@@ -96,13 +98,13 @@ func (l *Lexer) readRune() (rune, error) {
 	return cur, err
 }
 
-func (l *Lexer) lex() (Position, Token) {
+func (l *Lexer) lex() Token {
 	for {
 		l.pos.column += 1
 		cur, err := l.readRune()
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				return l.pos, NewToken(EOF, "")
+				return NewToken(EOF, "", l.pos)
 			}
 			err = fmt.Errorf("invalid json: %s", err.Error())
 			handleError(err)
@@ -113,19 +115,19 @@ func (l *Lexer) lex() (Position, Token) {
 			l.pos.column = 0
 			continue
 		case '{':
-			return l.pos, NewToken(L_BRACE, "{")
+			return NewToken(L_BRACE, "{", l.pos)
 		case '}':
-			return l.pos, NewToken(R_BRACE, "}")
+			return NewToken(R_BRACE, "}", l.pos)
 		case '[':
-			return l.pos, NewToken(L_BRACKET, "[")
+			return NewToken(L_BRACKET, "[", l.pos)
 		case ']':
-			return l.pos, NewToken(R_BRACKET, "]")
+			return NewToken(R_BRACKET, "]", l.pos)
 		case ':':
-			return l.pos, NewToken(COLON, ":")
+			return NewToken(COLON, ":", l.pos)
 		case ',':
-			return l.pos, NewToken(COMMA, ",")
+			return NewToken(COMMA, ",", l.pos)
 		case '"':
-			p, token := l.lexString()
+			token := l.lexString()
 
 			next, err := l.readRune()
 			if err != nil {
@@ -136,7 +138,7 @@ func (l *Lexer) lex() (Position, Token) {
 				handleError(err)
 			}
 			token.Literal = "\"" + token.Literal + "\""
-			return p, token
+			return token
 		default:
 			if unicode.IsSpace(cur) {
 				continue
@@ -147,7 +149,7 @@ func (l *Lexer) lex() (Position, Token) {
 				l.rewind()
 				return l.lexLiteral()
 			} else {
-				return l.pos, NewToken(INVALID, string(cur))
+				return NewToken(INVALID, string(cur), l.pos)
 			}
 		}
 	}
@@ -161,8 +163,8 @@ func (l *Lexer) rewind() {
 	l.pos.column -= 1
 }
 
-func (l *Lexer) lexLiteral() (Position, Token) {
-	pos, token := l.lexString()
+func (l *Lexer) lexLiteral() Token {
+	token := l.lexString()
 	if token.Literal == "true" || token.Literal == "false" {
 		token.Type = BOOLEAN
 	} else if token.Literal == "null" {
@@ -170,7 +172,7 @@ func (l *Lexer) lexLiteral() (Position, Token) {
 	} else {
 		token.Type = INVALID
 	}
-	return pos, token
+	return token
 
 }
 
@@ -189,7 +191,7 @@ func (l *Lexer) isValidCharacter(c rune) bool {
 	return true
 }
 
-func (l *Lexer) lexString() (Position, Token) {
+func (l *Lexer) lexString() Token {
 	lit := ""
 	startPos := l.pos
 	for {
@@ -226,17 +228,17 @@ func (l *Lexer) lexString() (Position, Token) {
 			} else {
 				l.rewind()
 				l.rewind()
-				return startPos, NewToken(IDENT, lit)
+				return NewToken(IDENT, lit, startPos)
 			}
 
 		} else {
 			l.rewind()
-			return startPos, NewToken(IDENT, lit)
+			return NewToken(IDENT, lit, startPos)
 		}
 	}
 }
 
-func (l *Lexer) lexNumber() (Position, Token) {
+func (l *Lexer) lexNumber() Token {
 	lit := ""
 	startPos := l.pos
 	isDecimal := false
@@ -263,7 +265,7 @@ func (l *Lexer) lexNumber() (Position, Token) {
 			}
 		} else {
 			l.rewind()
-			return startPos, NewToken(NUMBER, lit)
+			return NewToken(NUMBER, lit, startPos)
 		}
 	}
 
