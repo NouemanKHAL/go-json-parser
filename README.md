@@ -2,6 +2,7 @@
 
 This is my solution to the second problem in the [John Crickett's Coding Challenges](https://codingchallenges.fyi/challenges/challenge-json-parser/).
 
+I made this project just for fun and to play around with lexers and parsers, it is still a work in progress.
 
 ## Setup
 
